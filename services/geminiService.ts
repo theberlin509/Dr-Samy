@@ -12,8 +12,6 @@ import { GoogleGenAI, HarmCategory, HarmBlockThreshold, Part, GenerateContentRes
 import { DR_SAMY_SYSTEM_PROMPT } from '../constants';
 import type { ImageFile, Message } from '../types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 const safetySettings = [
   {
     category: HarmCategory.HARM_CATEGORY_HARASSMENT,
@@ -39,6 +37,8 @@ export const getDrSamyResponse = async (
   history: Message[]
 ): Promise<string> => {
   try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
     // FIX: The history passed to `ai.chats.create` should not include the current user message.
     // The current user message is sent via `chat.sendMessage`.
     const chatHistory = history.slice(0, -1);
