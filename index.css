@@ -845,3 +845,33 @@ html.dark .input-button:hover:not(:disabled) {
 .check-email-back-link:hover {
   text-decoration: underline;
 }
+
+/* === ApiKeyScreen.tsx === */
+.api-key-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem;
+  background-color: var(--accent-secondary);
+  border-radius: 0.5rem;
+  text-align: left;
+  font-size: 0.875rem;
+  color: var(--accent-text);
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.api-key-info svg {
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.api-key-link {
+  color: var(--accent-text);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.api-key-link:hover {
+  text-decoration: none;
+}

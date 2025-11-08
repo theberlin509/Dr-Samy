@@ -147,6 +147,7 @@ const App: React.FC = () => {
 
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
+      
       setError(`Error: Could not get a response. ${errorMessage}`);
       const errorBotMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -155,8 +156,6 @@ const App: React.FC = () => {
       };
       setConversations(prevConvs => prevConvs.map(conv => {
         if (conv.id === currentConvId) {
-          // Revert adding user message if API fails, or keep it and add error.
-          // Let's add the error message for clarity.
           return { ...conv, messages: [...conv.messages, errorBotMessage] };
         }
         return conv;
