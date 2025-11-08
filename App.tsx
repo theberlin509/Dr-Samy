@@ -185,14 +185,22 @@ const App: React.FC = () => {
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
       
-      setError(`Error: Could not get a response. ${errorMessage}`);
+      let errorForBubble = `Désolé, une erreur est survenue. Veuillez réessayer. (${errorMessage})`;
+      let errorForBanner = `Error: Could not get a response. ${errorMessage}`;
+
+      if (errorMessage.includes('API key is not configured')) {
+        errorForBubble = "**Erreur de configuration du serveur.**\nLa clé API pour le service Gemini n'a pas été trouvée. Si vous êtes le propriétaire de cette application, veuillez vous assurer que la variable d'environnement `API_KEY` est correctement définie dans les paramètres de votre projet Vercel et que vous avez redéployé l'application.";
+        errorForBanner = "Erreur de configuration : La clé API est manquante sur le serveur. Veuillez vérifier les paramètres de déploiement.";
+      }
+      
+      setError(errorForBanner);
       
       setConversations(prevConvs => prevConvs.map(conv => {
         if (conv.id === conversationId) {
           const lastMessage = conv.messages[conv.messages.length - 1];
           if (lastMessage && lastMessage.id === botMessageId) {
             const updatedMessages = [...conv.messages];
-            updatedMessages[updatedMessages.length - 1] = { ...lastMessage, text: `Désolé, une erreur est survenue. Veuillez réessayer. (${errorMessage})` };
+            updatedMessages[updatedMessages.length - 1] = { ...lastMessage, text: errorForBubble };
             return { ...conv, messages: updatedMessages };
           }
         }

@@ -46,7 +46,7 @@ export default async function handler(req: Request) {
         // FIX: Per coding guidelines, the API key must be obtained exclusively from `process.env.API_KEY`.
         const apiKey = process.env.API_KEY; 
         if (!apiKey) {
-            console.error("API key not found in environment variables.");
+            console.error("CRITICAL: Environment variable 'API_KEY' is missing or empty. This must be set in the Vercel project's Environment Variables settings. The application cannot connect to the Gemini API without it.");
             return new Response(JSON.stringify({ error: 'API key is not configured on the server.' }), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
