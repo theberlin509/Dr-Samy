@@ -84,15 +84,6 @@ const App: React.FC = () => {
   const handleSendMessage = async (prompt: string, images: File[]) => {
     if (!prompt.trim() && images.length === 0) return;
 
-    let currentConvId = activeConversationId;
-    let isFirstMessage = false;
-
-    if (!currentConvId) {
-        const newConversation = startNewChat();
-        currentConvId = newConversation.id;
-        isFirstMessage = true;
-    }
-
     setIsLoading(true);
     setError(null);
 
@@ -115,17 +106,44 @@ const App: React.FC = () => {
       images: imageFiles.length > 0 ? imageFiles : undefined,
     };
     
-    let historyForApi: Message[] = [];
-    setConversations(prevConvs => 
-        prevConvs.map(conv => {
-            if (conv.id === currentConvId) {
-                historyForApi = [...conv.messages, userMessage];
-                return { ...conv, messages: historyForApi };
-            }
-            return conv;
-        })
-    );
+    const activeConv = conversations.find(c => c.id === activeConversationId);
+    const isNewOrEmptyChat = !activeConv || activeConv.messages.length === 0;
 
+    const conversationId = activeConv?.id || Date.now().toString();
+    
+    const baseHistory = isNewOrEmptyChat ? [] : activeConv.messages;
+    const historyForApi = [...baseHistory, userMessage];
+
+    if (isNewOrEmptyChat) {
+      setConversations(prevConvs => {
+        const existingConv = prevConvs.find(c => c.id === conversationId);
+        if (existingConv) {
+          return prevConvs.map(c => c.id === conversationId ? {
+            ...c,
+            title: prompt.substring(0, 50) || 'Nouvelle Consultation',
+            messages: [userMessage],
+          } : c);
+        } else {
+          const newConversation: Conversation = {
+            id: conversationId,
+            messages: [userMessage],
+            title: prompt.substring(0, 50) || 'Nouvelle Consultation',
+            created_at: new Date().toISOString(),
+          };
+          return [newConversation, ...prevConvs];
+        }
+      });
+      if (!activeConversationId) {
+        setActiveConversationId(conversationId);
+      }
+    } else {
+      setConversations(prevConvs =>
+        prevConvs.map(conv =>
+          conv.id === conversationId ? { ...conv, messages: historyForApi } : conv
+        )
+      );
+    }
+    
     const botMessageId = (Date.now() + 1).toString();
     const placeholderBotMessage: Message = {
       id: botMessageId,
@@ -133,22 +151,19 @@ const App: React.FC = () => {
       text: '',
     };
     
-    setTimeout(() => {
-        setConversations(prevConvs => prevConvs.map(conv => {
-            if (conv.id === currentConvId) {
-                const newTitle = isFirstMessage ? prompt.substring(0, 50) : conv.title;
-                return { ...conv, messages: [...conv.messages, placeholderBotMessage], title: newTitle };
-            }
-            return conv;
-        }));
-    }, 0);
+    setConversations(prevConvs => prevConvs.map(conv => {
+        if (conv.id === conversationId) {
+            return { ...conv, messages: [...conv.messages, placeholderBotMessage] };
+        }
+        return conv;
+    }));
     
     try {
       await streamDrSamyResponse(
         historyForApi,
         (chunk) => { // onChunk
           setConversations(prevConvs => prevConvs.map(conv => {
-            if (conv.id === currentConvId) {
+            if (conv.id === conversationId) {
               const lastMessage = conv.messages[conv.messages.length - 1];
               if (lastMessage && lastMessage.id === botMessageId) {
                 const updatedMessages = [...conv.messages];
@@ -171,7 +186,7 @@ const App: React.FC = () => {
       setError(`Error: Could not get a response. ${errorMessage}`);
       
       setConversations(prevConvs => prevConvs.map(conv => {
-        if (conv.id === currentConvId) {
+        if (conv.id === conversationId) {
           const lastMessage = conv.messages[conv.messages.length - 1];
           if (lastMessage && lastMessage.id === botMessageId) {
             const updatedMessages = [...conv.messages];
@@ -198,7 +213,6 @@ const App: React.FC = () => {
 
     setConversations(prev => [newConversation, ...prev]);
     setActiveConversationId(newConversation.id);
-    return newConversation;
   };
 
   const selectConversation = (id: string) => {
