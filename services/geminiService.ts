@@ -13,15 +13,13 @@ export const getDrSamyResponse = async (
     });
 
     if (!response.ok) {
-        let errorData;
+        const errorText = await response.text();
         try {
-            errorData = await response.json();
+            const errorJson = JSON.parse(errorText);
+            throw new Error(errorJson.error || errorText || `Server error: ${response.statusText}`);
         } catch (e) {
-            // If the response is not JSON, use the raw text
-            const errorText = await response.text();
             throw new Error(errorText || `Server error: ${response.statusText}`);
         }
-        throw new Error(errorData.error || `Server error: ${response.statusText}`);
     }
 
     const data = await response.json();
