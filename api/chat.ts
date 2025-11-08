@@ -1,7 +1,10 @@
 import { GoogleGenAI, HarmCategory, HarmBlockThreshold, Part } from "@google/genai";
-import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { DR_SAMY_SYSTEM_PROMPT } from '../constants';
 import type { Message } from '../types';
+
+export const config = {
+  runtime: 'edge',
+};
 
 const safetySettings = [
   {
@@ -22,23 +25,32 @@ const safetySettings = [
   },
 ];
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: Request) {
     if (req.method !== 'POST') {
-        res.setHeader('Allow', 'POST');
-        return res.status(405).json({ error: 'Method Not Allowed' });
+        return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { 
+            status: 405, 
+            headers: { 'Content-Type': 'application/json', 'Allow': 'POST' } 
+        });
     }
 
     try {
-        const { history } = req.body as { history: Message[] };
+        const { history } = await req.json() as { history: Message[] };
 
         if (!history || history.length === 0) {
-            return res.status(400).json({ error: 'History is required and cannot be empty.' });
+            return new Response(JSON.stringify({ error: 'History is required and cannot be empty.' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' }
+            });
         }
         
-        const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY; 
+        // FIX: Per coding guidelines, the API key must be obtained exclusively from `process.env.API_KEY`.
+        const apiKey = process.env.API_KEY; 
         if (!apiKey) {
             console.error("API key not found in environment variables.");
-            return res.status(500).json({ error: 'API key is not configured on the server.' });
+            return new Response(JSON.stringify({ error: 'API key is not configured on the server.' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+            });
         }
         
         const ai = new GoogleGenAI({ apiKey });
@@ -61,20 +73,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return { role: msg.role, parts };
         });
 
-        const response = await ai.models.generateContent({
+        // FIX: The `safetySettings` property should be inside the `config` object.
+        const stream = await ai.models.generateContentStream({
             model: 'gemini-2.5-flash',
             contents: contents,
-            safetySettings,
             config: {
                 systemInstruction: DR_SAMY_SYSTEM_PROMPT,
+                safetySettings,
             },
         });
         
-        return res.status(200).json({ text: response.text });
+        const readableStream = new ReadableStream({
+            async start(controller) {
+                for await (const chunk of stream) {
+                    const text = chunk.text;
+                    if (text) {
+                        controller.enqueue(new TextEncoder().encode(text));
+                    }
+                }
+                controller.close();
+            },
+        });
+
+        return new Response(readableStream, {
+            headers: {
+                'Content-Type': 'text/plain; charset=utf-8',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+            },
+        });
 
     } catch (error) {
-        console.error("Gemini API call failed on server:", error);
+        console.error("Gemini API stream failed on server:", error);
         const errorMessage = error instanceof Error ? error.message : 'An unknown server error occurred.';
-        return res.status(500).json({ error: errorMessage });
+        return new Response(JSON.stringify({ error: errorMessage }), { 
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+        });
     }
 }

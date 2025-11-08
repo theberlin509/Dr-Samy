@@ -1,8 +1,11 @@
 import type { Message } from '../types';
 
-export const getDrSamyResponse = async (
-  history: Message[]
-): Promise<string> => {
+export const streamDrSamyResponse = async (
+  history: Message[],
+  onChunk: (chunk: string) => void,
+  onComplete: () => void,
+  onError: (error: Error) => void
+): Promise<void> => {
   try {
     const response = await fetch('/api/chat', {
         method: 'POST',
@@ -12,7 +15,7 @@ export const getDrSamyResponse = async (
         body: JSON.stringify({ history }),
     });
 
-    if (!response.ok) {
+    if (!response.ok || !response.body) {
         const errorText = await response.text();
         try {
             const errorJson = JSON.parse(errorText);
@@ -22,17 +25,25 @@ export const getDrSamyResponse = async (
         }
     }
 
-    const data = await response.json();
-    if (typeof data.text !== 'string') {
-      throw new Error("Invalid response format from server.");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+            onComplete();
+            break;
+        }
+        const chunk = decoder.decode(value, { stream: true });
+        onChunk(chunk);
     }
-    return data.text;
 
   } catch (error) {
-    console.error("API call failed:", error);
+    console.error("API stream failed:", error);
     if (error instanceof Error) {
-        throw error;
+        onError(error);
+    } else {
+        onError(new Error("An unknown error occurred while communicating with the server."));
     }
-    throw new Error("An unknown error occurred while communicating with the server.");
   }
 };

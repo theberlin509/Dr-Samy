@@ -5,7 +5,7 @@ import { Header } from './components/Header';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { Sidebar } from './components/Sidebar';
 import type { Message, ImageFile, Conversation } from './types';
-import { getDrSamyResponse } from './services/geminiService';
+import { streamDrSamyResponse } from './services/geminiService';
 import { LoadingIndicator } from './components/LoadingIndicator';
 import { Disclaimer } from './components/Disclaimer';
 import { supabase } from './services/supabaseClient';
@@ -87,7 +87,6 @@ const App: React.FC = () => {
     let currentConvId = activeConversationId;
     let isFirstMessage = false;
 
-    // If there's no active conversation, start a new one
     if (!currentConvId) {
         const newConversation = startNewChat();
         currentConvId = newConversation.id;
@@ -116,52 +115,73 @@ const App: React.FC = () => {
       images: imageFiles.length > 0 ? imageFiles : undefined,
     };
     
-    // Update local state immediately for better UX
-    let updatedMessages: Message[] = [];
+    let historyForApi: Message[] = [];
     setConversations(prevConvs => 
         prevConvs.map(conv => {
             if (conv.id === currentConvId) {
-                updatedMessages = [...conv.messages, userMessage];
-                return { ...conv, messages: updatedMessages };
+                historyForApi = [...conv.messages, userMessage];
+                return { ...conv, messages: historyForApi };
             }
             return conv;
         })
     );
+
+    const botMessageId = (Date.now() + 1).toString();
+    const placeholderBotMessage: Message = {
+      id: botMessageId,
+      role: 'model',
+      text: '',
+    };
+    
+    setTimeout(() => {
+        setConversations(prevConvs => prevConvs.map(conv => {
+            if (conv.id === currentConvId) {
+                const newTitle = isFirstMessage ? prompt.substring(0, 50) : conv.title;
+                return { ...conv, messages: [...conv.messages, placeholderBotMessage], title: newTitle };
+            }
+            return conv;
+        }));
+    }, 0);
     
     try {
-      const responseText = await getDrSamyResponse(updatedMessages);
-      const botMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'model',
-        text: responseText,
-      };
-      
-      setConversations(prevConvs => prevConvs.map(conv => {
-        if (conv.id === currentConvId) {
-          const finalMessages = [...conv.messages, botMessage];
-          const newTitle = isFirstMessage ? prompt.substring(0, 50) : conv.title;
-          return { ...conv, messages: finalMessages, title: newTitle };
+      await streamDrSamyResponse(
+        historyForApi,
+        (chunk) => { // onChunk
+          setConversations(prevConvs => prevConvs.map(conv => {
+            if (conv.id === currentConvId) {
+              const lastMessage = conv.messages[conv.messages.length - 1];
+              if (lastMessage && lastMessage.id === botMessageId) {
+                const updatedMessages = [...conv.messages];
+                updatedMessages[updatedMessages.length - 1] = { ...lastMessage, text: lastMessage.text + chunk };
+                return { ...conv, messages: updatedMessages };
+              }
+            }
+            return conv;
+          }));
+        },
+        () => { // onComplete
+          setIsLoading(false);
+        },
+        (error) => { // onError
+          throw error;
         }
-        return conv;
-      }));
-
+      );
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
-      
       setError(`Error: Could not get a response. ${errorMessage}`);
-      const errorBotMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'model',
-        text: `Désolé, une erreur est survenue. Veuillez réessayer. (${errorMessage})`,
-      };
+      
       setConversations(prevConvs => prevConvs.map(conv => {
         if (conv.id === currentConvId) {
-          return { ...conv, messages: [...conv.messages, errorBotMessage] };
+          const lastMessage = conv.messages[conv.messages.length - 1];
+          if (lastMessage && lastMessage.id === botMessageId) {
+            const updatedMessages = [...conv.messages];
+            updatedMessages[updatedMessages.length - 1] = { ...lastMessage, text: `Désolé, une erreur est survenue. Veuillez réessayer. (${errorMessage})` };
+            return { ...conv, messages: updatedMessages };
+          }
         }
         return conv;
       }));
-    } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
   
@@ -236,10 +256,11 @@ const App: React.FC = () => {
                 {messages.map((msg) => (
                   <ChatMessage key={msg.id} message={msg} />
                 ))}
+                {isLoading && messages[messages.length - 1]?.role !== 'model' && <LoadingIndicator />}
                 <div ref={chatEndRef} />
               </div>
             )}
-            {isLoading && <LoadingIndicator />}
+            
             {error && <div className="error-message">{error}</div>}
           </div>
         </main>
