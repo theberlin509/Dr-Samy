@@ -1,8 +1,6 @@
-import type { ImageFile, Message } from '../types';
+import type { Message } from '../types';
 
 export const getDrSamyResponse = async (
-  prompt: string,
-  images: ImageFile[],
   history: Message[]
 ): Promise<string> => {
   try {
@@ -11,11 +9,18 @@ export const getDrSamyResponse = async (
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ prompt, images, history }),
+        body: JSON.stringify({ history }),
     });
 
     if (!response.ok) {
-        const errorData = await response.json();
+        let errorData;
+        try {
+            errorData = await response.json();
+        } catch (e) {
+            // If the response is not JSON, use the raw text
+            const errorText = await response.text();
+            throw new Error(errorText || `Server error: ${response.statusText}`);
+        }
         throw new Error(errorData.error || `Server error: ${response.statusText}`);
     }
 

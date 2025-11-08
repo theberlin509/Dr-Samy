@@ -129,7 +129,7 @@ const App: React.FC = () => {
     );
     
     try {
-      const responseText = await getDrSamyResponse(prompt, imageFiles, updatedMessages);
+      const responseText = await getDrSamyResponse(updatedMessages);
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'model',
