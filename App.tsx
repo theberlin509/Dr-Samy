@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatInput } from './components/ChatInput';
 import { ChatMessage } from './components/ChatMessage';
@@ -183,6 +184,7 @@ const App: React.FC = () => {
       );
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
+      
       setError(`Error: Could not get a response. ${errorMessage}`);
       
       setConversations(prevConvs => prevConvs.map(conv => {
@@ -267,10 +269,13 @@ const App: React.FC = () => {
               <WelcomeScreen />
             ) : (
               <div className="messages-list">
-                {messages.map((msg) => (
-                  <ChatMessage key={msg.id} message={msg} />
-                ))}
-                {isLoading && messages[messages.length - 1]?.role !== 'model' && <LoadingIndicator />}
+                {messages.map((msg, index) => {
+                  // Replace the placeholder bot message with a loading indicator while waiting for the first chunk.
+                  if (isLoading && msg.role === 'model' && msg.text === '' && index === messages.length - 1) {
+                    return <LoadingIndicator key="loading-indicator" />;
+                  }
+                  return <ChatMessage key={msg.id} message={msg} />;
+                })}
                 <div ref={chatEndRef} />
               </div>
             )}
